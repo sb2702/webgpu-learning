@@ -35,106 +35,53 @@ async function main() {
     console.log("Configured canvas");
 
 
-    const encoder = device.createCommandEncoder();
 
-    console.log("Create GPU command encoder");
-    console.log(encoder);
+    const dest_view = context.getCurrentTexture().createView();
 
-
-
-
-    const vertices = new Float32Array([
-//   X,    Y,
-        -0.8, -0.8, // Triangle 1 (Blue)
-        0.8, -0.8,
-        0.8,  0.8,
-
-        -0.8, -0.8, // Triangle 2 (Red)
-        0.8,  0.8,
-        -0.8,  0.8,
-    ]);
-
-    console.log("Create a Vertex Buffer");
-
-    const vertexBuffer = device.createBuffer({
-        label: "Cell vertices",
-        size: vertices.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-    });
-
-    console.log(vertexBuffer);
-
-    console.log("Writing Vertex Buffer to device");
-
-    device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/0, vertices);
-
-
-    const vertexBufferLayout = {
-        arrayStride: 8,
-        attributes: [{
-            format: "float32x2",
-            offset: 0,
-            shaderLocation: 0, // Position, see vertex shader
-        }],
-    };
 
 
     const cellShaderModule = device.createShaderModule({
         label: "Cell shader",
         code: `
+        
+        struct OurVertexShaderOutput {
+          @builtin(position) position: vec4f,
+          @location(0) texcoord: vec2f,
+        };
+        
+        
         @vertex
-        fn vertexMain(@location(0) pos: vec2f) ->
-          @builtin(position) vec4f {
-          return vec4f(pos, 0, 1);
+        fn vertexMain( @builtin(vertex_index) vertexIndex : u32) ->  OurVertexShaderOutput{
+            let pos = array(
+            // 1st triangle
+            vec2f( 0.0,  0.0),  // center
+            vec2f( 1.0,  0.0),  // right, center
+            vec2f( 0.0,  1.0),  // center, top
+         
+            // 2st triangle
+            vec2f( 0.0,  1.0),  // center, top
+            vec2f( 1.0,  0.0),  // right, center
+            vec2f( 1.0,  1.0),  // right, top
+          );
+         
+          var vsOutput: OurVertexShaderOutput;
+          let xy = pos[vertexIndex];
+          vsOutput.position = vec4f(xy, 0.0, 1.0);
+          vsOutput.texcoord = xy;
+          return vsOutput;
         }
     
+    
+    
+        @group(0) @binding(0) var ourSampler: sampler;
+        @group(0) @binding(1) var ourTexture: texture_2d<f32>;
+        
         @fragment
-        fn fragmentMain() -> @location(0) vec4f {
-          return vec4f(1, 0, 0, 1);
+        fn fragmentMain(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
+           return textureSample(ourTexture, ourSampler, fsInput.texcoord);
         }
   `
     });
-
-
-    const cellPipeline = device.createRenderPipeline({
-        label: "Cell pipeline",
-        layout: "auto",
-        vertex: {
-            module: cellShaderModule,
-            entryPoint: "vertexMain",
-            buffers: [vertexBufferLayout]
-        },
-        fragment: {
-            module: cellShaderModule,
-            entryPoint: "fragmentMain",
-            targets: [{
-                format: canvasFormat
-            }]
-        }
-    });
-
-
-    const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-            view: context.getCurrentTexture().createView(),
-            loadOp: "clear",
-            storeOp: "store"
-        }]
-    });
-
-
-
-    pass.setPipeline(cellPipeline);
-    pass.setVertexBuffer(0, vertexBuffer);
-    pass.draw(vertices.length / 2); // 6 vertices
-
-
-    pass.end();
-
-    const commandBuffer = encoder.finish();
-
-    device.queue.submit([commandBuffer]);
-
 
 
 
@@ -181,7 +128,80 @@ async function main() {
 
     console.log(imgTexture);
 
+    const sampler = device.createSampler();
 
+
+
+
+
+    const cellPipeline = device.createRenderPipeline({
+        label: "Cell pipeline",
+        layout: "auto",
+        vertex: {
+            module: cellShaderModule,
+            entryPoint: "vertexMain"
+        },
+        fragment: {
+            module: cellShaderModule,
+            entryPoint: "fragmentMain",
+            targets: [{
+                format: canvasFormat
+            }]
+        }
+    });
+
+
+
+        const bindGroup = device.createBindGroup({
+            layout: cellPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: sampler },
+                { binding: 1, resource: imgTexture.createView() },
+            ],
+        });
+
+
+
+           const encoder = device.createCommandEncoder();
+
+             console.log("Create GPU command encoder");
+             console.log(encoder);
+
+
+
+
+
+
+
+             console.log("Create render pass");
+
+             const pass = encoder.beginRenderPass({
+                 label: 'Basic render pass',
+                 colorAttachments: [{
+                     view: dest_view,
+                     loadOp: "clear",
+                     storeOp: "store"
+                 }]
+             });
+
+
+             console.log(pass);
+
+
+             pass.setPipeline(cellPipeline);
+             pass.setBindGroup(0, bindGroup);
+             pass.draw(6); // 6 vertices
+
+
+             pass.end();
+
+             const commandBuffer = encoder.finish();
+
+             console.log("Finish encoder");
+
+             device.queue.submit([commandBuffer]);
+
+             console.log(device);
 
 
 }
