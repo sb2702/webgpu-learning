@@ -32,13 +32,13 @@ async function main() {
       ) -> OurVertexShaderOutput {
         let pos = array(
           // 1st triangle
-          vec2f( 0.0,  0.0),  // center
-          vec2f( 1.0,  0.0),  // right, center
-          vec2f( 0.0,  1.0),  // center, top
+          vec2f( -1.0,  -1.0),  // center
+          vec2f( 1.0,  -1.0),  // right, center
+          vec2f( -1.0,  1.0),  // center, top
 
           // 2st triangle
-          vec2f( 0.0,  1.0),  // center, top
-          vec2f( 1.0,  0.0),  // right, center
+          vec2f( -1.0,  1.0),  // center, top
+          vec2f( 1.0,  -1.0),  // right, center
           vec2f( 1.0,  1.0),  // right, top
         );
 
@@ -53,7 +53,7 @@ async function main() {
       @group(0) @binding(1) var ourTexture: texture_2d<f32>;
 
       @fragment fn fs(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
-        return textureSample(ourTexture, ourSampler, fsInput.texcoord);
+        return textureSample(ourTexture, ourSampler, fsInput.texcoord*0.5+0.5);
       }
     `,
     });
@@ -116,7 +116,7 @@ async function main() {
         colorAttachments: [
             {
                 // view: <- to be filled out when we render
-                clearValue: [0.3, 0.3, 0.3, 1],
+                clearValue: [0, 0, 0, 1],
                 loadOp: 'clear',
                 storeOp: 'store',
             },
@@ -142,18 +142,7 @@ async function main() {
         device.queue.submit([commandBuffer]);
     }
 
-    const observer = new ResizeObserver(entries => {
-        for (const entry of entries) {
-            const canvas = entry.target;
-            const width = entry.contentBoxSize[0].inlineSize;
-            const height = entry.contentBoxSize[0].blockSize;
-            canvas.width = Math.max(1, Math.min(width, device.limits.maxTextureDimension2D));
-            canvas.height = Math.max(1, Math.min(height, device.limits.maxTextureDimension2D));
-            // re-render
-            render();
-        }
-    });
-    observer.observe(canvas);
+    render();
 }
 
 
