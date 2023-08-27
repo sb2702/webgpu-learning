@@ -99,22 +99,23 @@ async function main() {
 
     device.queue.copyExternalImageToTexture({source: imgBitmap}, {texture}, [256, 256])
 
-    
+
     /* ----------------- Shader ------------------------*/
 
 
     const module = device.createShaderModule({
-        label: ' Shader Module',
+        label: 'Shader Module',
         code: `
-      struct OurVertexShaderOutput {
+
+      struct VertexShaderOutput {
         @builtin(position) position: vec4f,
-        @location(0) texcoord: vec2f,
+        @location(0) tex_coord: vec2f,
       };
 
-      @vertex fn vs(@location(0) pos: vec2f) -> OurVertexShaderOutput {
-        var vsOutput: OurVertexShaderOutput;
+      @vertex fn vertexMain(@location(0) pos: vec2f) -> VertexShaderOutput {
+        var vsOutput: VertexShaderOutput;
         vsOutput.position = vec4f(pos, 0.0, 1.0);
-        vsOutput.texcoord = pos;
+        vsOutput.tex_coord = pos;
         return vsOutput;
       }
 
@@ -122,9 +123,11 @@ async function main() {
       @group(0) @binding(1) var ourSampler: sampler;
       @group(0) @binding(2) var ourTexture: texture_2d<f32>;
 
-      @fragment fn fs(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
+      @fragment fn fragmentMain(input: VertexShaderOutput) -> @location(0) vec4f {
       
-        let color  = textureSample(ourTexture, ourSampler, fsInput.texcoord*0.5+0.5);
+        let tex_pos = input.tex_coord*0.5+0.5;
+      
+        let color  = textureSample(ourTexture, ourSampler, tex_pos);
         
         let yuv = color.xyz*transpose(rgb2yuv);
         
@@ -143,16 +146,16 @@ async function main() {
         layout: 'auto',
         vertex: {
             module,
-            entryPoint: 'vs',
+            entryPoint: 'vertexMain',
             buffers: [vertexBufferLayout]
         },
         fragment: {
             module,
-            entryPoint: 'fs',
+            entryPoint: 'fragmentMain',
             targets: [{ format: presentationFormat }],
         },
     });
-
+    
 
     const sampler = device.createSampler();
 
