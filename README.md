@@ -1,6 +1,6 @@
 # WebGPU Playground
 
-Basic playground exercises to learn how to do image processing in WebGPU, using help from [Google Code Labs](https://codelabs.developers.google.com/your-first-webgpu-app),  and [WebGPU Fundamentals](https://webgpufundamentals.org/webgpu/lessons/)
+Basic playground exercises that I used to learn how to do image processing in WebGPU, using help from [Google Code Labs](https://codelabs.developers.google.com/your-first-webgpu-app),  and [WebGPU Fundamentals](https://webgpufundamentals.org/webgpu/lessons/)
 
 The repo is divided into a few basic test exercises in this order
 
