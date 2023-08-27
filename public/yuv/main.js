@@ -56,7 +56,12 @@ async function main() {
       
         let color  = textureSample(ourTexture, ourSampler, fsInput.texcoord*0.5+0.5);
         
-        let y =  color.x*.299 + color.y*.587 + color.z*.114;
+        
+        let rgb2yuv = mat3x3f(0.299, .587, .114, -.14713, -.28886, 0.436, 0.615, -0.51499, -0.1);
+        
+        let yuv = rgb2yuv*color.xyz;
+        
+        let y =  yuv.x;
         
         return vec4f(y, y, y, 1.0);
       }
