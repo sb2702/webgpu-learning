@@ -161,7 +161,7 @@ async function main() {
       @vertex fn vertexMain(@location(0) pos: vec2f) -> VertexShaderOutput {
         var vsOutput: VertexShaderOutput;
         vsOutput.position = vec4f(pos, 0.0, 1.0);
-        vsOutput.tex_coord = pos;
+        vsOutput.tex_coord = pos*0.5 + 0.5;
         return vsOutput;
       }
 
@@ -173,17 +173,13 @@ async function main() {
 
       @fragment fn fragmentMain(input: VertexShaderOutput) -> @location(0) vec4f {
       
-        let tex_pos = input.tex_coord*0.5+0.5;
-      
-        var val  = 0.0;
-        
-        
+         var val  = 0.0;
+          
          for(var i = 0u; i < 3; i++){
-            
             let a = vec3f(
-            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3].xy).xyz).x,
-            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3+1].xy).xyz).x,
-            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3+2].xy).xyz).x
+                (rgb2yuv*textureSample(ourTexture, ourSampler, input.tex_coord + kernel_offsets[i*3].xy).xyz).x,
+                (rgb2yuv*textureSample(ourTexture, ourSampler, input.tex_coord + kernel_offsets[i*3+1].xy).xyz).x,
+                (rgb2yuv*textureSample(ourTexture, ourSampler, input.tex_coord + kernel_offsets[i*3+2].xy).xyz).x
             );
             
             val += dot(a, gaussian[i]);
