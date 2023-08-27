@@ -126,14 +126,56 @@ async function main() {
       @fragment fn fragmentMain(input: VertexShaderOutput) -> @location(0) vec4f {
       
         let tex_pos = input.tex_coord*0.5+0.5;
+        
+        
+          
+        
+        var val  = 0.0;
+        
+          let kernel_offsets = array(
+            vec2f( -1.0,  -1.0),  
+            vec2f( 0.0,  -1.0),  
+            vec2f( 1.0,  -1.0),  
+            vec2f( -1.0,  0.0),  
+            vec2f( 0.0,  0.0),  
+            vec2f( 1.0,  0.0),  
+            vec2f( -1.0,  -1.0),  
+            vec2f( 0.0,  -1.0),  
+            vec2f( 1.0,  -1.0),  
+          );
+          
+          
+         let gaussian = array(
+            0.0675,
+            0.125,
+            0.0675,
+            0.125,
+            0.250,
+            0.125,
+            0.0675,
+            0.125,
+            0.0675
+          );
+          
+          
+          let resolution = vec2f(256.0, 256.0);
+        
+        
+        
+         for(var i = 0u; i < 9; i++){
+            let offset = kernel_offsets[i]/resolution;
+            
+            let color  = textureSample(ourTexture, ourSampler, tex_pos + offset);
+            
+            let yuv =  color.xyz*transpose(rgb2yuv);
+            let y = yuv.x;
+            
+            val += y*gaussian[i];
+          
+        } 
       
-        let color  = textureSample(ourTexture, ourSampler, tex_pos);
         
-        let yuv = color.xyz*transpose(rgb2yuv);
-        
-        let y =  yuv.x;
-        
-        return vec4f(y, y, y, 1.0);
+        return vec4f(val, val, val, 1.0);
       }
     `,
     });
