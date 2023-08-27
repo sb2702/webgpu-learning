@@ -62,6 +62,34 @@ async function main() {
     device.queue.writeBuffer(gaussianBuffer, /*bufferOffset=*/0, gaussianBufferValues);
 
 
+
+    /* ---------------- Gaussian Buffer ---------------------------*/
+
+    const kernelOffsetsValue = new Float32Array([
+        -1/256, -1/256, 0, 0,
+        0     , -1/256, 0, 0,
+        1/256 , -1/256, 0, 0,
+        -1/256,      0, 0, 0,
+        0     ,      0, 0, 0,
+        1/256 ,      0, 0, 0,
+        -1/256,  1/256, 0, 0,
+        0     ,  1/256, 0, 0,
+        1/256 ,  1/256, 0, 0,
+    ]);
+
+    console.log(kernelOffsetsValue.byteLength);
+
+    const kernelOffsetsBuffer= device.createBuffer({
+        label: "Guassian Buffer Kernel",
+        size: kernelOffsetsValue.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+
+
+    device.queue.writeBuffer(kernelOffsetsBuffer, /*bufferOffset=*/0, kernelOffsetsValue);
+
+
     /* ----------------- Write Vertex Buffer ------------------------*/
 
 
@@ -139,8 +167,9 @@ async function main() {
 
       @group(0) @binding(0) var<uniform> rgb2yuv: mat3x3f;
       @group(0) @binding(1) var<uniform> gaussian: array<vec3f, 3>;
-      @group(0) @binding(2) var ourSampler: sampler;
-      @group(0) @binding(3) var ourTexture: texture_2d<f32>;
+      @group(0) @binding(2) var<uniform> kernel_offsets: array<vec4f, 9>;
+      @group(0) @binding(3) var ourSampler: sampler;
+      @group(0) @binding(4) var ourTexture: texture_2d<f32>;
 
       @fragment fn fragmentMain(input: VertexShaderOutput) -> @location(0) vec4f {
       
@@ -148,30 +177,13 @@ async function main() {
       
         var val  = 0.0;
         
-          let kernel_offsets = array(
-            vec2f( -1.0,  -1.0),  
-            vec2f( 0.0,  -1.0),  
-            vec2f( 1.0,  -1.0),  
-            vec2f( -1.0,  0.0),  
-            vec2f( 0.0,  0.0),  
-            vec2f( 1.0,  0.0),  
-            vec2f( -1.0,  -1.0),  
-            vec2f( 0.0,  -1.0),  
-            vec2f( 1.0,  -1.0),  
-          );
-          
-          
-          
-          let resolution = vec2f(256.0, 256.0);
-        
-        
         
          for(var i = 0u; i < 3; i++){
             
             let a = vec3f(
-            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3]/resolution).xyz).x,
-            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3+1]/resolution).xyz).x,
-            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3+2]/resolution).xyz).x
+            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3].xy).xyz).x,
+            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3+1].xy).xyz).x,
+            (rgb2yuv*textureSample(ourTexture, ourSampler, tex_pos + kernel_offsets[i*3+2].xy).xyz).x
             );
             
             val += dot(a, gaussian[i]);
@@ -211,8 +223,9 @@ async function main() {
         entries: [
             { binding: 0, resource: {buffer: rgb2yuvBuffer} },
             { binding: 1, resource: {buffer: gaussianBuffer} },
-            { binding: 2, resource: sampler },
-            { binding: 3, resource: texture.createView() },
+            { binding: 2, resource: {buffer: kernelOffsetsBuffer} },
+            { binding: 3, resource: sampler },
+            { binding: 4, resource: texture.createView() },
 
         ],
     });
