@@ -19,6 +19,32 @@ async function main() {
         format: presentationFormat,
     });
 
+    // mat3x3f(0.299, -.1473, 0.615, 0.587, -.28886, -.51499, 0.114, 0.436, -0.1001);
+
+    const rgb2yuv = new Float32Array([
+        0.299, -0.1473, 0.615, 1.0,
+        0.587, -.2886, -.51499, 1.0,
+        0.114,  0.436, -.1001, 1.0
+    ]);
+
+
+    console.log(rgb2yuv);
+
+
+    console.log("Create a Uniform buffer Buffer");
+
+    const rgb2yuvBuffer= device.createBuffer({
+        label: "Cell vertices",
+        size: rgb2yuv.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    console.log(rgb2yuvBuffer);
+
+    console.log("Writing Uniform Buffer to device");
+
+    device.queue.writeBuffer(rgb2yuvBuffer, /*bufferOffset=*/0, rgb2yuv);
+
     const module = device.createShaderModule({
         label: 'our hardcoded textured quad shaders',
         code: `
@@ -49,16 +75,17 @@ async function main() {
         return vsOutput;
       }
 
-      @group(0) @binding(0) var ourSampler: sampler;
-      @group(0) @binding(1) var ourTexture: texture_2d<f32>;
+      @group(0) @binding(0) var<uniform> rgb2yuv: mat3x3f;
+      @group(0) @binding(1) var ourSampler: sampler;
+      @group(0) @binding(2) var ourTexture: texture_2d<f32>;
+
+
 
       @fragment fn fs(fsInput: OurVertexShaderOutput) -> @location(0) vec4f {
       
         let color  = textureSample(ourTexture, ourSampler, fsInput.texcoord*0.5+0.5);
         
-        let rgb2yuv = mat3x3f(0.299, -.1473, 0.615, 0.587, -.28886, -.51499, 0.114, 0.436, -0.1001);
-        
-        let yuv = rgb2yuv*color.xyz;
+        let yuv = color.xyz*transpose(rgb2yuv);
         
         let y =  yuv.x;
         
@@ -66,6 +93,9 @@ async function main() {
       }
     `,
     });
+
+
+
 
     const pipeline = device.createRenderPipeline({
         label: 'hardcoded textured quad pipeline',
@@ -82,7 +112,6 @@ async function main() {
     });
 
 
-
     const texture = device.createTexture({
         label: 'yellow F on red',
         size: [256, 256],
@@ -94,7 +123,6 @@ async function main() {
     });
 
 
-
     const response = await fetch('./test-img.png');
     const blob = await response.blob();
     console.log("Got blob", blob);
@@ -102,29 +130,28 @@ async function main() {
 
     device.queue.copyExternalImageToTexture({source: imgBitmap}, {texture}, [256, 256])
 
-    /*
-    device.queue.writeTexture(
-        { texture },
-        textureData,
-        { bytesPerRow: kTextureWidth * 4 },
-        { width: kTextureWidth, height: kTextureHeight },
-    );
-*/
     const sampler = device.createSampler();
+
+    console.log("Bind group layout");
+    console.log(pipeline.getBindGroupLayout(0));
+
 
     const bindGroup = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
         entries: [
-            { binding: 0, resource: sampler },
-            { binding: 1, resource: texture.createView() },
+            { binding: 0, resource: {buffer: rgb2yuvBuffer} },
+            { binding: 1, resource: sampler },
+            { binding: 2, resource: texture.createView() },
+
         ],
     });
+
 
     const renderPassDescriptor = {
         label: 'our basic canvas renderPass',
         colorAttachments: [
             {
-                // view: <- to be filled out when we render
+                view:  context.getCurrentTexture().createView(),
                 clearValue: [0, 0, 0, 1],
                 loadOp: 'clear',
                 storeOp: 'store',
@@ -132,26 +159,46 @@ async function main() {
         ],
     };
 
-    function render() {
-        // Get the current texture from the canvas context and
-        // set it as the texture to render to.
-        renderPassDescriptor.colorAttachments[0].view =
-            context.getCurrentTexture().createView();
 
-        const encoder = device.createCommandEncoder({
-            label: 'render quad encoder',
-        });
-        const pass = encoder.beginRenderPass(renderPassDescriptor);
-        pass.setPipeline(pipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.draw(6);  // call our vertex shader 6 times
-        pass.end();
 
-        const commandBuffer = encoder.finish();
-        device.queue.submit([commandBuffer]);
-    }
+    const encoder = device.createCommandEncoder({
+        label: 'render quad encoder',
+    });
+    const pass = encoder.beginRenderPass(renderPassDescriptor);
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(6);  // call our vertex shader 6 times
+    pass.end();
 
-    render();
+    const commandBuffer = encoder.finish();
+    device.queue.submit([commandBuffer]);
+
+    /*
+
+
+
+
+
+
+
+
+
+
+
+
+           function render() {
+            // Get the current texture from the canvas context and
+            // set it as the texture to render to.
+
+        }
+
+        render();
+
+
+
+     */
+
+
 }
 
 
