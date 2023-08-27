@@ -25,6 +25,9 @@ async function main() {
 
 
 
+    // ===============   RGB 2 YUV Operation ==========================//
+
+
     /* ----------------- RGB 2 YUV Buffer ------------------------*/
 
 
@@ -42,52 +45,6 @@ async function main() {
 
     device.queue.writeBuffer(rgb2yuvBuffer, /*bufferOffset=*/0, rgb2yuv);
 
-
-    /* ---------------- Gaussian Buffer ---------------------------*/
-
-    const gaussianBufferValues = new Float32Array([
-        0.0675,  0.125,  0.0675, 0.0,
-        0.125,  0.250,  0.1250, 0.0,
-        0.0675,  0.125,  0.0675 , 0.0
-    ]);
-
-    const gaussianBuffer= device.createBuffer({
-        label: "Guassian Buffer Kernel",
-        size: gaussianBufferValues.byteLength,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-
-
-    device.queue.writeBuffer(gaussianBuffer, /*bufferOffset=*/0, gaussianBufferValues);
-
-
-
-    /* ---------------- Gaussian Buffer ---------------------------*/
-
-    const kernelOffsetsValue = new Float32Array([
-        -1/256, -1/256, 0, 0,
-        0     , -1/256, 0, 0,
-        1/256 , -1/256, 0, 0,
-        -1/256,      0, 0, 0,
-        0     ,      0, 0, 0,
-        1/256 ,      0, 0, 0,
-        -1/256,  1/256, 0, 0,
-        0     ,  1/256, 0, 0,
-        1/256 ,  1/256, 0, 0,
-    ]);
-
-    console.log(kernelOffsetsValue.byteLength);
-
-    const kernelOffsetsBuffer= device.createBuffer({
-        label: "Guassian Buffer Kernel",
-        size: kernelOffsetsValue.byteLength,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-
-
-    device.queue.writeBuffer(kernelOffsetsBuffer, /*bufferOffset=*/0, kernelOffsetsValue);
 
 
     /* ----------------- Write Vertex Buffer ------------------------*/
@@ -165,8 +122,8 @@ async function main() {
     /* ----------------- Shader ------------------------*/
 
 
-    const module = device.createShaderModule({
-        label: 'Shader Module',
+    const rgb2yuv_shader = device.createShaderModule({
+        label: 'RGB 2 YUV',
         code: `
 
       struct VertexShaderOutput {
@@ -191,10 +148,8 @@ async function main() {
         let color = textureSample(ourTexture, ourSampler, input.tex_coord);
         
         let yuv = rgb2yuv*color.xyz;
-        
-        let val  = yuv.x;
   
-        return vec4f(val, val, val, 1.0);
+        return vec4f(yuv, 1.0);
       }
     `,
     });
@@ -202,16 +157,16 @@ async function main() {
     /* ----------------- Pipeline------------------------*/
 
 
-    const pipeline = device.createRenderPipeline({
-        label: 'hardcoded textured quad pipeline',
+    const rgb2yuv_pipeline = device.createRenderPipeline({
+        label: 'RGB 2 YUV Pipeline',
         layout: 'auto',
         vertex: {
-            module,
+            module: rgb2yuv_shader,
             entryPoint: 'vertexMain',
             buffers: [vertexBufferLayout]
         },
         fragment: {
-            module,
+            module: rgb2yuv_shader,
             entryPoint: 'fragmentMain',
             targets: [{ format:  storageTexture.format}],
         },
@@ -221,8 +176,8 @@ async function main() {
     const sampler = device.createSampler();
 
 
-    const bindGroup = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
+    const rgb2yuv_bind_group = device.createBindGroup({
+        layout: rgb2yuv_pipeline.getBindGroupLayout(0),
         entries: [
             { binding: 0, resource: {buffer: rgb2yuvBuffer} },
             { binding: 1, resource: sampler },
@@ -231,7 +186,7 @@ async function main() {
         ],
     });
 
-    const renderPassDescriptor = {
+    const rgb2yuv_render_pass = {
         label: 'our basic canvas renderPass',
         colorAttachments: [
             {
@@ -245,21 +200,177 @@ async function main() {
 
 
 
-    /* -----------  Render Code -------------------*/
+    /* -----------  Render Pass 1 (Storage to YUV) -------------------*/
 
 
-    const encoder = device.createCommandEncoder({
+    const rgb2yuv_encoder = device.createCommandEncoder({
         label: 'Render YUV Image',
     });
-    const pass = encoder.beginRenderPass(renderPassDescriptor);
-    pass.setPipeline(pipeline);
-    pass.setVertexBuffer(0, vertexBuffer);
-    pass.setBindGroup(0, bindGroup);
-    pass.draw(6);  // call our vertex shader 6 times
-    pass.end();
+    const rgb2yuv_pass = rgb2yuv_encoder.beginRenderPass(rgb2yuv_render_pass);
+    rgb2yuv_pass.setPipeline(rgb2yuv_pipeline);
+    rgb2yuv_pass.setVertexBuffer(0, vertexBuffer);
+    rgb2yuv_pass.setBindGroup(0, rgb2yuv_bind_group);
+    rgb2yuv_pass.draw(6);  // call our vertex shader 6 times
+    rgb2yuv_pass.end();
 
-    const commandBuffer = encoder.finish();
-    device.queue.submit([commandBuffer]);
+    device.queue.submit([rgb2yuv_encoder.finish()]);
+
+
+
+    // ===============   Gaussian Blur Operation ==========================//
+
+
+
+    /* ---------------- Gaussian Buffer ---------------------------*/
+
+    const gaussianBufferValues = new Float32Array([
+        0.0675,  0.125,  0.0675, 0.0,
+        0.125,  0.250,  0.1250, 0.0,
+        0.0675,  0.125,  0.0675 , 0.0
+    ]);
+
+    const gaussianBuffer= device.createBuffer({
+        label: "Guassian Buffer Kernel",
+        size: gaussianBufferValues.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+
+
+    device.queue.writeBuffer(gaussianBuffer, /*bufferOffset=*/0, gaussianBufferValues);
+
+
+
+    /* ---------------- Gaussian Buffer ---------------------------*/
+
+    const kernelOffsetsValue = new Float32Array([
+        -1/256, -1/256, 0, 0,
+        0     , -1/256, 0, 0,
+        1/256 , -1/256, 0, 0,
+        -1/256,      0, 0, 0,
+        0     ,      0, 0, 0,
+        1/256 ,      0, 0, 0,
+        -1/256,  1/256, 0, 0,
+        0     ,  1/256, 0, 0,
+        1/256 ,  1/256, 0, 0,
+    ]);
+
+
+    const kernelOffsetsBuffer= device.createBuffer({
+        label: "Guassian Buffer Kernel",
+        size: kernelOffsetsValue.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+
+
+    device.queue.writeBuffer(kernelOffsetsBuffer, /*bufferOffset=*/0, kernelOffsetsValue);
+
+
+
+    /* -------------------------- Shader -----------------------*/
+
+
+    const gaussian_blur_shader = device.createShaderModule({
+        label: 'Gaussian Blur Module',
+        code: `
+
+      struct VertexShaderOutput {
+        @builtin(position) position: vec4f,
+        @location(0) tex_coord: vec2f,
+      };
+
+      @vertex fn vertexMain(@location(0) pos: vec2f) -> VertexShaderOutput {
+        var vsOutput: VertexShaderOutput;
+        vsOutput.position = vec4f(pos, 0.0, 1.0);
+        vsOutput.tex_coord = (pos*0.5 + 0.5);
+        
+        vsOutput.tex_coord.y = - 1.0* vsOutput.tex_coord.y  + 1.0;
+        return vsOutput;
+      }
+
+      @group(0) @binding(0) var<uniform> gaussian: array<vec3f, 3>;
+      @group(0) @binding(1) var<uniform> kernel_offsets: array<vec4f, 9>;
+      @group(0) @binding(2) var ourSampler: sampler;
+      @group(0) @binding(3) var ourTexture: texture_2d<f32>;
+
+      @fragment fn fragmentMain(input: VertexShaderOutput) -> @location(0) vec4f {
+      
+         var val  = 0.0;
+          
+         for(var i = 0u; i < 3; i++){
+         
+            let a = vec3f(
+                textureSample(ourTexture, ourSampler, input.tex_coord + kernel_offsets[i*3].xy).x,
+                textureSample(ourTexture, ourSampler, input.tex_coord + kernel_offsets[i*3+1].xy).x,
+                textureSample(ourTexture, ourSampler, input.tex_coord + kernel_offsets[i*3+2].xy).x
+            );
+            
+            val += dot(a, gaussian[i]);
+          
+        } 
+      
+        
+        return vec4f(val, val, val, 1.0);
+      }
+    `,
+    });
+
+
+    const gaussian_blur_pipeline = device.createRenderPipeline({
+        label: 'Guassian Blur Pipeline',
+        layout: 'auto',
+        vertex: {
+            module: gaussian_blur_shader,
+            entryPoint: 'vertexMain',
+            buffers: [vertexBufferLayout]
+        },
+        fragment: {
+            module: gaussian_blur_shader,
+            entryPoint: 'fragmentMain',
+            targets: [{ format:  presentationFormat}],
+        },
+    });
+
+
+
+    const gausian_blur_bind_group= device.createBindGroup({
+        layout: gaussian_blur_pipeline.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: {buffer: gaussianBuffer} },
+            { binding: 1, resource: {buffer: kernelOffsetsBuffer} },
+            { binding: 2, resource: sampler },
+            { binding: 3, resource: storageTexture.createView() },
+
+        ],
+    });
+
+    const gaussian_render_pass = {
+        label: 'our basic canvas renderPass',
+        colorAttachments: [
+            {
+                view:  context.getCurrentTexture().createView(),
+                clearValue: [0, 0, 0, 1],
+                loadOp: 'clear',
+                storeOp: 'store',
+            },
+        ],
+    };
+
+
+
+    const gaussian_encoder = device.createCommandEncoder({
+        label: 'Gaussian Blur',
+    });
+
+    const gaussian_pass = gaussian_encoder.beginRenderPass(gaussian_render_pass);
+    gaussian_pass.setPipeline(gaussian_blur_pipeline);
+    gaussian_pass.setVertexBuffer(0, vertexBuffer);
+    gaussian_pass.setBindGroup(0, gausian_blur_bind_group);
+    gaussian_pass.draw(6);  // call our vertex shader 6 times
+    gaussian_pass.end();
+
+    device.queue.submit([ gaussian_encoder.finish()]);
 
 
 }
